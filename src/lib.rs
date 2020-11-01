@@ -619,6 +619,130 @@ impl<T: Clone> Grid<T> {
     pub fn flatten(&self) -> &Vec<T> {
         return &self.data
     }
+
+    /// Swap two of the grid rows in-place.
+    ///
+    /// # Panics
+    /// Panics if either row index is out of bounds.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    /// let mut grid = grid![[1,2,3][4,5,6]];
+    /// grid.swap_rows(0, 1);
+    /// assert_eq!(grid, grid![[4,5,6][1,2,3]]);
+    /// ```
+
+    pub fn swap_rows(&mut self, row1: usize, row2: usize) {
+        for col in 0..self.cols() {
+            self.swap(row1, col, row2, col);
+        }
+    }
+
+    /// Swap two of the grid columns in-place.
+    ///
+    /// # Panics
+    /// Panics if either column index is out of bounds.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    /// let mut grid = grid![[1,2,3][4,5,6]];
+    /// grid.swap_cols(0, 1);
+    /// assert_eq!(grid, grid![[2,1,3][5,4,6]]);
+    /// ```
+    pub fn swap_cols(&mut self, col1: usize, col2: usize) {
+        for row in 0..self.rows() {
+            self.swap(row, col1, row, col2);
+        }
+    }
+
+    /// Swap two grid elements.
+    ///
+    /// # Panics
+    /// Panics if either element (row1, col1) or (row2, col2) are out of bounds.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    /// let mut grid = grid![[1,2,3][4,5,6]];
+    /// grid.swap(0, 0, 1, 1);
+    /// assert_eq!(grid, grid![[5,2,3][4,1,6]]);
+    /// grid.swap(0, 2, 1, 0);
+    /// assert_eq!(grid, grid![[5,2,4][3,1,6]]);
+    /// ```
+    pub fn swap(&mut self, row1: usize, col1: usize, row2: usize, col2: usize) {
+        self.data
+            .swap(row1 * self.cols + col1, row2 * self.cols + col2)
+    }
+
+    /// Transpose the grid.
+    ///
+    /// Transposing a grid swaps the rows with the columns.
+    ///
+    /// # Panics
+    /// Panics if either element (row1, col1) or (row2, col2) are out of bounds.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    ///
+    /// let mut grid = grid![[1,2,3][4,5,6][7,8,9]];
+    /// grid.transpose();
+    /// assert_eq!(grid, grid![[1,4,7][2,5,8][3,6,9]]);
+    ///
+    /// let mut grid = grid![[1,2,3,4][5,6,7,8][9,10,11,12][13,14,15,16]];
+    /// grid.transpose();
+    /// assert_eq!(grid, grid![[1,5,9,13][2,6,10,14][3,7,11,15][4,8,12,16]]);
+    ///
+    /// let mut grid = grid![[1,2,3][4,5,6]];
+    /// grid.transpose();
+    /// assert_eq!(grid, grid![[1,4][2,5][3,6]]);
+    ///
+    /// let mut grid = grid![[1,2][3,4][5,6][7,8]];
+    /// grid.transpose();
+    /// assert_eq!(grid, grid![[1,3,5,7][2,4,6,8]]);
+    /// ```
+    pub fn transpose(&mut self) {
+        if self.rows() == self.cols() {
+            // square grid
+            for row in 1..self.rows() {
+                for col in 0..row {
+                    self.swap(row, col, col, row);
+                }
+            }
+        } else {
+            let mut swapped = 0;
+            'index: for index in 1..self.data.len() - 2 {
+                // not very idiomatic, because we want to do it in place with zero allocation
+                let mut current = index;
+                // only handle minimal element in each cycle
+                'cycle: loop {
+                    current = (current % self.rows()) * self.cols() + current / self.rows();
+                    if current < index {
+                        continue 'index;
+                    } else if current == index {
+                        break 'cycle;
+                    }
+                }
+                // now we know the cycle is good, swap the elements
+                'swap: loop {
+                    let next = (current % self.rows()) * self.cols() + current / self.rows();
+                    swapped += 1;
+                    if next == index {
+                        break 'swap;
+                    }
+                    self.data.swap(current, next); // may be equal (if empty cycle), doesn't matter
+                    current = next;
+                }
+                // Only need at most N-2 swaps
+                if swapped == self.data.len() - 2 {
+                    break 'index; // Finished with all
+                }
+            }
+            std::mem::swap(&mut self.rows, &mut self.cols);
+        }
+    }
 }
 
 impl<T: Clone> Clone for Grid<T> {
