@@ -676,12 +676,41 @@ impl<T: Clone> Grid<T> {
             .swap(row1 * self.cols + col1, row2 * self.cols + col2)
     }
 
-    /// Transpose the grid.
+
+    /// Permute the grid in-place according to a generic permutation function
+    /// on the indices of the underlying data.
+    /// The function maps for each index, the index of the element that should
+    /// be placed there.
+    /// WARNING: this method assumes the function is a valid permutation.
+    /// If it isn't this function may panic or loop indefinitely.
+    fn permute<F>(&mut self, permutation: F) where F: Fn(usize) -> usize {
+        'index: for index in 0..self.data.len() {
+            // not very idiomatic, because we want to do it in place with zero allocation
+            let mut current = index;
+            // only handle minimal element in each cycle
+            'cycle: loop {
+                current = permutation(current);
+                if current < index {
+                    continue 'index;
+                } else if current == index {
+                    break 'cycle;
+                }
+            }
+            // now we know the cycle is good, swap the elements
+            'swap: loop {
+                let next = permutation(current);
+                if next == index {
+                    break 'swap;
+                }
+                self.data.swap(current, next); // may be equal (if empty cycle), doesn't matter
+                current = next;
+            }
+        }
+    }
+
+    /// Transpose the grid in place.
     ///
     /// Transposing a grid swaps the rows with the columns.
-    ///
-    /// # Panics
-    /// Panics if either element (row1, col1) or (row2, col2) are out of bounds.
     ///
     /// # Examples
     /// ```
@@ -712,36 +741,74 @@ impl<T: Clone> Grid<T> {
                 }
             }
         } else {
-            let mut swapped = 0;
-            'index: for index in 1..self.data.len() - 2 {
-                // not very idiomatic, because we want to do it in place with zero allocation
-                let mut current = index;
-                // only handle minimal element in each cycle
-                'cycle: loop {
-                    current = (current % self.rows()) * self.cols() + current / self.rows();
-                    if current < index {
-                        continue 'index;
-                    } else if current == index {
-                        break 'cycle;
-                    }
-                }
-                // now we know the cycle is good, swap the elements
-                'swap: loop {
-                    let next = (current % self.rows()) * self.cols() + current / self.rows();
-                    swapped += 1;
-                    if next == index {
-                        break 'swap;
-                    }
-                    self.data.swap(current, next); // may be equal (if empty cycle), doesn't matter
-                    current = next;
-                }
-                // Only need at most N-2 swaps
-                if swapped == self.data.len() - 2 {
-                    break 'index; // Finished with all
-                }
-            }
+            let rows = self.rows();
+            let cols = self.cols();
+            self.permute(|i| (i % rows) * cols + i / rows);
             std::mem::swap(&mut self.rows, &mut self.cols);
         }
+    }
+
+    /// Rotate the grid clockwise in place.
+    /// After rotation the row and column counts are swapped.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    ///
+    /// let mut grid = grid![[1,2,3][4,5,6]];
+    /// grid.rotate_cw();
+    /// assert_eq!(grid, grid![[4,1][5,2][6,3]]);
+    ///
+    /// let mut grid = grid![[1,2][3,4][5,6][7,8]];
+    /// grid.rotate_cw();
+    /// assert_eq!(grid, grid![[7,5,3,1][8,6,4,2]]);
+    ///
+    /// let mut grid = grid![[1,2,3][4,5,6][7,8,9]];
+    /// grid.rotate_cw();
+    /// assert_eq!(grid, grid![[7,4,1][8,5,2][9,6,3]]);
+    pub fn rotate_cw(&mut self) {
+        let cols = self.cols();
+        let rows = self.rows();
+        self.permute(|i| (rows - (i % rows) - 1) * cols + i / rows);
+        std::mem::swap(&mut self.rows, &mut self.cols);
+    }
+
+    /// Rotate the grid counter-clockwise in place.
+    /// After rotation the row and column counts are swapped.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    ///
+    /// let mut grid = grid![[4,1][5,2][6,3]];
+    /// grid.rotate_ccw();
+    /// assert_eq!(grid, grid![[1,2,3][4,5,6]]);
+    ///
+    /// let mut grid = grid![[7,5,3,1][8,6,4,2]];
+    /// grid.rotate_ccw();
+    /// assert_eq!(grid, grid![[1,2][3,4][5,6][7,8]]);
+    ///
+    /// let mut grid = grid![[1,2,3][4,5,6][7,8,9]];
+    /// grid.rotate_ccw();
+    /// assert_eq!(grid, grid![[3,6,9][2,5,8][1,4,7]]);
+    pub fn rotate_ccw(&mut self) {
+        let cols = self.cols();
+        let rows = self.rows();
+        self.permute(|i| (i % rows) * cols + cols - (i / rows) - 1);
+        std::mem::swap(&mut self.rows, &mut self.cols);
+    }
+
+    /// Reverse the grid in-place. Equivalent to a 180-rotation.
+    ///
+    /// # Examples
+    /// ```
+    /// use grid::*;
+    ///
+    /// let mut grid = grid![[1,2,3][4,5,6]];
+    /// grid.reverse();
+    /// assert_eq!(grid, grid![[6,5,4][3,2,1]]);
+    pub fn reverse(&mut self) {
+        self.data.reverse()
     }
 }
 
